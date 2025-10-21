@@ -14,6 +14,9 @@ const (
 	ExporterCloudTrace ExporterType = "cloudtrace"
 )
 
+// DefaultSamplingRatio defines the fallback trace sampling ratio when none is provided.
+const DefaultSamplingRatio = 0.1
+
 // Config controls how otelx initializes tracing.
 type Config struct {
 	ServiceName    string `json:"serviceName"`
@@ -21,7 +24,7 @@ type Config struct {
 	Environment    string `json:"environment"`
 
 	Exporter      ExporterType      `json:"exporter"`
-	SamplingRatio float64           `json:"samplingRatio"`
+	SamplingRatio *float64          `json:"samplingRatio"`
 	Endpoint      string            `json:"endpoint"`
 	Insecure      bool              `json:"insecure"`
 	GCPProjectID  string            `json:"gcpProjectId"`
@@ -53,8 +56,10 @@ func (cfg Config) validate() error {
 		return fmt.Errorf("otelx: unsupported exporter %q", cfg.Exporter)
 	}
 
-	if cfg.SamplingRatio < 0 || cfg.SamplingRatio > 1 {
-		return fmt.Errorf("otelx: samplingRatio must be within [0,1], got %v", cfg.SamplingRatio)
+	if cfg.SamplingRatio != nil {
+		if ratio := *cfg.SamplingRatio; ratio < 0 || ratio > 1 {
+			return fmt.Errorf("otelx: samplingRatio must be within [0,1], got %v", ratio)
+		}
 	}
 
 	if cfg.Exporter == ExporterCloudTrace && cfg.GCPProjectID == "" {
@@ -62,4 +67,9 @@ func (cfg Config) validate() error {
 	}
 
 	return nil
+}
+
+// Float64 is a helper that returns a pointer to the provided float64.
+func Float64(v float64) *float64 {
+	return &v
 }

@@ -2,7 +2,6 @@ package otelx
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -50,9 +49,12 @@ func Setup(ctx context.Context, cfg Config, logger logx.Logger, opts ...Option) 
 		return nil, err
 	}
 
-	sampler := cfg.SamplingRatio
-	if sampler == 0 {
-		sampler = 0.1
+	sampler := DefaultSamplingRatio
+	if cfg.SamplingRatio != nil {
+		sampler = *cfg.SamplingRatio
+	}
+	if options.samplerHook != nil {
+		options.samplerHook(sampler)
 	}
 
 	resourceOpts := []resource.Option{resource.WithSchemaURL(semconv.SchemaURL)}
@@ -102,9 +104,7 @@ func Setup(ctx context.Context, cfg Config, logger logx.Logger, opts ...Option) 
 		TP:         tp,
 		Propagator: prop,
 		shutdown: func(ctx context.Context) error {
-			exportErr := exporter.Shutdown(ctx)
-			tpErr := tp.Shutdown(ctx)
-			return errors.Join(exportErr, tpErr)
+			return tp.Shutdown(ctx)
 		},
 	}, nil
 }

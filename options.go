@@ -9,6 +9,7 @@ type setupOptions struct {
 	global       bool
 	propagator   propagation.TextMapPropagator
 	resourceOpts []resource.Option
+	samplerHook  func(float64)
 }
 
 // Option customises Setup behaviour.
@@ -32,5 +33,11 @@ func WithPropagator(p propagation.TextMapPropagator) Option {
 func WithResourceOptions(opts ...resource.Option) Option {
 	return func(o *setupOptions) {
 		o.resourceOpts = append(o.resourceOpts, opts...)
+	}
+}
+
+func withSamplerHook(hook func(float64)) Option {
+	return func(o *setupOptions) {
+		o.samplerHook = hook
 	}
 }

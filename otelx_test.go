@@ -58,7 +58,7 @@ func TestSetupWithGlobal(t *testing.T) {
 }
 
 func TestSetupWithSamplingRatio(t *testing.T) {
-	prov, err := Setup(context.Background(), Config{ServiceName: "svc", SamplingRatio: 0.05}, nil)
+	prov, err := Setup(context.Background(), Config{ServiceName: "svc", SamplingRatio: Float64(0.05)}, nil)
 	if err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
@@ -101,6 +101,51 @@ func TestSetupAcceptsResourceOptions(t *testing.T) {
 		t.Fatalf("setup failed: %v", err)
 	}
 	_ = prov.Shutdown(context.Background())
+}
+
+func TestSetupUsesDefaultSamplingRatioWhenUnset(t *testing.T) {
+	restore := saveGlobal()
+	defer restore()
+
+	var observed float64
+	prov, err := Setup(context.Background(), Config{ServiceName: "svc"}, nil, withSamplerHook(func(v float64) {
+		observed = v
+	}))
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	if observed != DefaultSamplingRatio {
+		t.Fatalf("expected default sampling ratio %v, got %v", DefaultSamplingRatio, observed)
+	}
+	_ = prov.Shutdown(context.Background())
+}
+
+func TestSetupAllowsZeroSamplingRatio(t *testing.T) {
+	restore := saveGlobal()
+	defer restore()
+
+	var observed float64 = -1
+	prov, err := Setup(context.Background(), Config{
+		ServiceName:    "svc",
+		SamplingRatio:  Float64(0),
+		Exporter:       ExporterStdout,
+		ServiceVersion: "test",
+	}, nil, withSamplerHook(func(v float64) {
+		observed = v
+	}))
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	if observed != 0 {
+		t.Fatalf("expected sampling ratio 0, got %v", observed)
+	}
+	tracer := prov.TP.Tracer("test")
+	ctx, span := tracer.Start(context.Background(), "zero_sampling")
+	if span.IsRecording() {
+		t.Fatalf("expected span to be non-recording when sampling ratio is zero")
+	}
+	span.End()
+	_ = prov.Shutdown(ctx)
 }
 
 func TestHTTPHelpers(t *testing.T) {
