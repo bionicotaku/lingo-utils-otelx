@@ -22,6 +22,7 @@
 - 提供 gRPC/HTTP helper：`GRPCServerHandler`、`GRPCClientHandler`、`HTTPHandler`、`HTTPTransport`，直接复用官方 instrumentation。
 - 统一 Shutdown：退出时调用 `Provider.Shutdown(ctx)` 即可刷新残余 span 并释放 exporter 资源。
 - 完整单元测试覆盖：基础配置、全局注册、资源选项、HTTP/gRPC helper 均有测试。
+- 内置启用标准 Resource 探测器：自动解析 `OTEL_RESOURCE_ATTRIBUTES` 等环境变量，并补齐 `telemetry.sdk.*`、`process.*`、`host.*` 等属性，无需各服务重复配置。
 
 ---
 
@@ -47,6 +48,7 @@ type Config struct {
 - `Exporter=otlp`：对接 OTEL Collector / Jaeger / Tempo 等后端，`Endpoint` 支持 `host:port` 或 `https://`。
 - `Exporter=cloudtrace`：需提供 `GCPProjectID` 并确保运行环境具备 GCP 凭据。
 - `ResourceAttrs` 可补充如 `service.instance.id`、`deployment.region`。
+- 默认会执行 OTel 官方提供的 Resource 探测器（环境变量、Process、Host、Telemetry SDK 等）；如需扩展或覆盖，可通过 `WithResourceOptions(...)` 追加自定义项。
 
 示例（YAML）
 ```yaml
