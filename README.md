@@ -32,17 +32,17 @@ type Config struct {
     ServiceVersion string            `json:"serviceVersion"`
     Environment    string            `json:"environment"`
 
-    Exporter      ExporterType       `json:"exporter"` // stdout|otlp|cloudtrace
-    SamplingRatio float64            `json:"samplingRatio"`
-    Endpoint      string             `json:"endpoint"`
-    Insecure      bool               `json:"insecure"`
-    GCPProjectID  string             `json:"gcpProjectId"`
-    Headers       map[string]string  `json:"headers"`
-    ResourceAttrs map[string]string  `json:"resourceAttrs"`
+    Exporter      ExporterType        `json:"exporter"` // stdout|otlp|cloudtrace
+    SamplingRatio *float64            `json:"samplingRatio"`
+    Endpoint      string              `json:"endpoint"`
+    Insecure      bool                `json:"insecure"`
+    GCPProjectID  string              `json:"gcpProjectId"`
+    Headers       map[string]string   `json:"headers"`
+    ResourceAttrs map[string]string   `json:"resourceAttrs"`
 }
 ```
 - `ServiceName` 必填。
-- `SamplingRatio` 默认 0.1（10%），范围 [0,1]。
+- `SamplingRatio` 默认 0.1（10%），范围 [0,1]；显式传入 `otelx.Float64(0)` 可禁用采样。
 - `Exporter=stdout`：无依赖，适合开发环境。
 - `Exporter=otlp`：对接 OTEL Collector / Jaeger / Tempo 等后端，`Endpoint` 支持 `host:port` 或 `https://`。
 - `Exporter=cloudtrace`：需提供 `GCPProjectID` 并确保运行环境具备 GCP 凭据。
@@ -73,7 +73,7 @@ telemetryCfg := otelx.Config{
     Exporter:       otelx.ExporterOTLP,
     Endpoint:       "localhost:4317",
     Insecure:       true,
-    SamplingRatio:  0.1,
+    SamplingRatio:  otelx.Float64(0.1),
 }
 prov, err := otelx.Setup(ctx, telemetryCfg, logger, otelx.WithGlobal())
 if err != nil {
