@@ -6,12 +6,17 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	logx "github.com/bionicotaku/lingo-utils-logx"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 )
 
 func TestSetupRequiresServiceName(t *testing.T) {
@@ -148,6 +153,38 @@ func TestSetupAllowsZeroSamplingRatio(t *testing.T) {
 	_ = prov.Shutdown(ctx)
 }
 
+func TestSetupIncludesDefaultResourceDetectors(t *testing.T) {
+	restore := saveGlobal()
+	defer restore()
+
+	prov, err := Setup(context.Background(), Config{ServiceName: "svc", SamplingRatio: Float64(1)}, nil)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	capture := &resourceCapture{}
+	prov.TP.RegisterSpanProcessor(capture)
+
+	tracer := prov.TP.Tracer("test")
+	ctx, span := tracer.Start(context.Background(), "with-default-resource")
+	span.End()
+	if err := prov.TP.ForceFlush(ctx); err != nil {
+		t.Fatalf("force flush failed: %v", err)
+	}
+
+	res := capture.Resource()
+	if res == nil {
+		t.Fatalf("expected resource to be captured")
+	}
+	if !hasAttribute(res, semconv.ServiceNameKey, "svc") {
+		t.Fatalf("expected service name attribute to be present")
+	}
+	if !hasAttribute(res, semconv.TelemetrySDKLanguageKey, "go") {
+		t.Fatalf("expected telemetry sdk language attribute to be present")
+	}
+
+	_ = prov.Shutdown(ctx)
+}
+
 func TestHTTPHelpers(t *testing.T) {
 	handler := HTTPHandler("op", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -192,3 +229,38 @@ func (noopLogger) Warn(context.Context, string, ...logx.Attr)         {}
 func (noopLogger) Error(context.Context, string, error, ...logx.Attr) {}
 func (noopLogger) Fatal(context.Context, string, error, ...logx.Attr) {}
 func (noopLogger) With(...logx.Attr) logx.Logger                      { return noopLogger{} }
+
+type resourceCapture struct {
+	mu  sync.Mutex
+	res *resource.Resource
+}
+
+func (c *resourceCapture) OnStart(context.Context, sdktrace.ReadWriteSpan) {}
+
+func (c *resourceCapture) OnEnd(span sdktrace.ReadOnlySpan) {
+	c.mu.Lock()
+	c.res = span.Resource()
+	c.mu.Unlock()
+}
+
+func (c *resourceCapture) Shutdown(context.Context) error { return nil }
+
+func (c *resourceCapture) ForceFlush(context.Context) error { return nil }
+
+func (c *resourceCapture) Resource() *resource.Resource {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.res
+}
+
+func hasAttribute(res *resource.Resource, key attribute.Key, expected string) bool {
+	if res == nil {
+		return false
+	}
+	for _, attr := range res.Attributes() {
+		if attr.Key == key && attr.Value.AsString() == expected {
+			return true
+		}
+	}
+	return false
+}

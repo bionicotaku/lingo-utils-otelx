@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 )
 
 // Provider bundles the TracerProvider, Propagator and shutdown hook created by Setup.
@@ -57,13 +57,21 @@ func Setup(ctx context.Context, cfg Config, logger logx.Logger, opts ...Option) 
 		options.samplerHook(sampler)
 	}
 
-	resourceOpts := []resource.Option{resource.WithSchemaURL(semconv.SchemaURL)}
+	resourceOpts := []resource.Option{
+		resource.WithSchemaURL(semconv.SchemaURL),
+		resource.WithFromEnv(),
+		resource.WithProcess(),
+		resource.WithOS(),
+		resource.WithHost(),
+		resource.WithTelemetrySDK(),
+	}
+
 	attrs := []attribute.KeyValue{semconv.ServiceName(cfg.ServiceName)}
 	if cfg.ServiceVersion != "" {
 		attrs = append(attrs, semconv.ServiceVersion(cfg.ServiceVersion))
 	}
 	if cfg.Environment != "" {
-		attrs = append(attrs, semconv.DeploymentEnvironment(cfg.Environment))
+		attrs = append(attrs, semconv.DeploymentEnvironmentName(cfg.Environment))
 	}
 	for k, v := range cfg.ResourceAttrs {
 		if strings.TrimSpace(k) == "" {
